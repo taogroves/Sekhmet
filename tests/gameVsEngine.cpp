@@ -99,7 +99,18 @@ int main() {
     MoveGen::init();
     eval::init();
 
-    auto b = Board();
+    Board b;
+
+    // ask for a fen string
+    std::string fen;
+    std::cout << "Enter a FEN string to start from, or press enter for starting position: ";
+    std::getline(std::cin, fen);
+    if (fen.empty()) {
+        b = Board();
+    } else {
+        b = Board(fen.c_str());
+    }
+
     bool w_is_human = true;
     bool b_is_human = true;
 

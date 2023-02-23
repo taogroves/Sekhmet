@@ -23,7 +23,7 @@ bool tests::legalMovesTest(const Board& b, int expected) {
 }
 
 bool tests::perfTest(const Board &b, int depth, int expected) {
-    std::cout << "Testing " << depth << " ply search..." << std::endl;
+    //std::cout << "Testing " << depth << " ply search..." << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     int count = nodeCount(b, depth);
     auto end = std::chrono::high_resolution_clock::now();
@@ -41,7 +41,7 @@ bool tests::perfTest(const Board &b, int depth, int expected) {
 }
 
 bool tests::perfTestMultithreaded(const Board &b, int depth, int expected) {
-    std::cout << "Testing " << depth << " ply search..." << std::endl;
+    //std::cout << "Testing " << depth << " ply search..." << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     unsigned long count = 0;
     MoveList legal = MoveGen::getLegalMoves(b);

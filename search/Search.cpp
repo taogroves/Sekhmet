@@ -235,6 +235,12 @@ void Searcher::setEvaluation(Searcher::Evaluation e) {
 
 int Searcher::negamax(Board b, int depth, int alpha, int beta) {
 
+    // check search limits
+    if (stopSearch || checkTime()) {
+        stopSearch = true;
+        return 0;
+    }
+
     if (depth == 0) {
         switch (evaluation) {
             case MATERIAL:

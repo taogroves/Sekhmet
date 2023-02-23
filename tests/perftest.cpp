@@ -8,13 +8,48 @@
 int main() {
     zKey::init();
     MoveGen::init();
-    std::cout << "Running standard tests..." << std::endl;
-    Board b = Board();
-    for (int i = 4; i < 20; i++) {
-        std::cout << "Depth " << i << " multithreaded" << std::endl;
-        tests::perfTestMultithreaded(b, i);
-        std::cout << "Depth " << i << " singlethreaded" << std::endl;
-        tests::perfTest(b, i);
+    Board b;
+
+    // ask for a fen string
+    std::string fen;
+    std::cout << "Enter a FEN string to test, or press enter for starting position: ";
+    std::getline(std::cin, fen);
+    if (fen.empty()) {
+        b = Board();
+    } else {
+        b = Board(fen.c_str());
     }
+
+    threadselect: bool multithreaded = false;
+    std::cout << "Run multithreaded? (y/n): ";
+    multithreaded = std::cin.get() == 'y';
+    std::cin.ignore();
+    bool singlethreaded = false;
+    std::cout << "Run singlethreaded? (y/n): ";
+    singlethreaded = std::cin.get() == 'y';
+    std::cin.ignore();
+    if (!multithreaded && !singlethreaded) {
+        std::cout << "Please select at least one option." << std::endl;
+        goto threadselect;
+    }
+
+    int minDepth, maxDepth;
+    std::cout << "Enter minimum depth: ";
+    std::cin >> minDepth;
+    std::cout << "Enter maximum depth: ";
+    std::cin >> maxDepth;
+    std::cin.ignore();
+
+    for (int i = minDepth; i <= maxDepth; i++) {
+        if (multithreaded) {
+            std::cout << "Multithreaded depth " << i << ": ";
+            tests::perfTestMultithreaded(b, i);
+        }
+        if (singlethreaded) {
+            std::cout << "Singlethreaded depth " << i << ": ";
+            tests::perfTest(b, i);
+        }
+    }
+
     return 0;
 }
