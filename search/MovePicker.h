@@ -54,6 +54,25 @@ private:
     const Board *_board;
 };
 
+class ParallelSearchMovePicker : MovePicker {
+public:
+
+    ParallelSearchMovePicker(MoveList *list, OrderingData *data, const Board *b);
+
+    Move getNext() override;
+
+    bool hasNext() const override;
+
+private:
+
+    void scoreMoves();
+
+    size_t _index;
+
+    const OrderingData *_data;
+    const Board *_board;
+};
+
 class QSearchMovePicker : MovePicker {
 public:
 

@@ -105,8 +105,8 @@ Move Searcher::timedSearch(const Board &b, int time) {
             std::cout << "Fail high" << std::endl;
             continue;
         } else {
-            alpha = score - 100;
-            beta = score + 100;
+            alpha = score - 25;
+            beta = score + 25;
         }
 
         depth++;

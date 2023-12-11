@@ -5,6 +5,12 @@
 #include "OrderingData.h"
 #include <cstring>
 
+OrderingData::OrderingData() {
+    _ttTable = nullptr;
+    ply = 0;
+    std::memset(historyHeuristicTable, 0, sizeof(historyHeuristicTable));
+}
+
 OrderingData::OrderingData(const zTable *table) {
     _ttTable = table;
     ply = 0;

@@ -369,14 +369,14 @@ void Board::makeMove(Move move) {
         fullMoveNumber++;
     }
 
-    // deal with 3-fold repetition
-    positionHistory[halfMoveClock] = zobristKey.getValue();
-
     // update castling rights
     updateCastlingRights(move);
 
     zobristKey.flipTurn();
     isWhiteTurn = !isWhiteTurn;
+
+    // deal with 3-fold repetition
+    positionHistory[halfMoveClock] = zobristKey.getValue();
 }
 
 zKey Board::getZobristKey() const {

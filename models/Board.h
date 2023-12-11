@@ -5,8 +5,7 @@
 #ifndef SEKHMET_BOARD_H
 #define SEKHMET_BOARD_H
 
-#include <list>
-#include <vector>
+//#include <vector>
 #include "../core/defs.h"
 #include "Move.h"
 #include "../transpositions/zKey.h"

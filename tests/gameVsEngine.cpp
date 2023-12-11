@@ -89,7 +89,11 @@ Move engineMove(const Board &b, int time, Searcher::Algorithm alg, Searcher::Eva
     auto s = Searcher();
     s.setEvaluation(eval);
     s.setAlgorithm(alg);
-    Move m = s.timedSearch(b, time * 1000);
+    Move m;
+    if (time == 0)
+        m = s.depthSearch(b, 5);
+    else
+        m = s.timedSearch(b, time * 1000);
     std::cout << (b.isWhiteTurn ? "White " : "Black ") << "plays " << m.getNotation() << std::endl;
     return m;
 }

@@ -3,6 +3,7 @@
 //
 
 #include "MovePicker.h"
+#include <vector>
 
 MovePicker::MovePicker(MoveList *list) {
     _moves = list;
@@ -42,16 +43,16 @@ bool SearchMovePicker::hasNext() const {
 
 void SearchMovePicker::scoreMoves() {
 
-    const TranspTableEntry *entry = _data->getTtTable()->lookup(_board->getZobristKey());
+    /*const TranspTableEntry *entry = _data->getTtTable()->lookup(_board->getZobristKey());
     Move pvMove;
     if (entry) {
         pvMove = entry->getBestMove();
-    }
+    }*/ // TODO add this back
 
     for (auto &move : *_moves) {
-        if (move == pvMove) {
-            move.setValue(INF);
-        } else if (move.getFlags() & Move::CAPTURE) {
+        /*if (move == pvMove) {
+            move.setValue(INF);*/
+        /*} else*/ if (move.getFlags() & Move::CAPTURE) {
             move.setValue(CAPTURE_BONUS + pieceValues[move.getCapturedPieceType()] - pieceValues[move.getPieceType()]);
         } else if (move.getFlags() & Move::PROMOTION) {
             move.setValue(PROMOTION_BONUS + pieceValues[move.getPromotionPieceType()]);

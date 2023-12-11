@@ -22,8 +22,10 @@ stalemate.
 - Full, stateless UCI support.
 - Fast Move Generation: ~42M nodes/sec singlethreaded, ~287M nodes/sec multithreaded with O2 compiler optimizations on a 5.3GHz Intel i7-12700K.
 - Extensive Search Optimization
-  - Killer Move Heuristic
-  - History Heuristic
+  - Move Ordering
+    - MVV-LVA
+    - Killer Move Heuristic
+    - History Heuristic
   - Principal Variation Search
   - Verified Null-Move Pruning
   - Adaptive Late Move Reduction

@@ -8,6 +8,7 @@
 #endif //SEKHMET_TRANSPTABLEENTRY_H
 
 #include "../models/Move.h"
+#include "../core/spinLock.h"
 
 class TranspTableEntry {
 

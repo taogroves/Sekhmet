@@ -12,6 +12,7 @@ class OrderingData {
 
 public:
 
+    OrderingData();
     OrderingData(const zTable *ttable);
 
     void clear();

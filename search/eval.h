@@ -20,8 +20,8 @@ public:
 protected:
 
     constexpr static short DOUBLED_PAWN_PENALTY = 15;
-    constexpr static short ISOLATED_PAWN_PENALTY = 15;
-    constexpr static short PASSED_PAWN_BONUS = 50;
+    constexpr static short ISOLATED_PAWN_PENALTY = 12;
+    constexpr static short PASSED_PAWN_BONUS = 20;
     constexpr static short DEFENDED_PAWN_BONUS = 5;
 
     constexpr static short pieceValues[6] = {100, 280, 305, 479, 929, 0};
