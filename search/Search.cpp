@@ -60,7 +60,7 @@ Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restri
 Move Searcher::timedSearch(const Board &b, int time) {
 
     // if we only have one legal move, return it
-    MoveList moves = MoveGen::getLegalMoves(b);
+    MoveList moves = MoveGen::getLegalMovesFast(b);
     if (moves.size() == 1) {
         std::cout << "Move " << moves[0].getNotation() << " is forced." << std::endl;
         return moves[0];
@@ -150,7 +150,7 @@ void Searcher::printPV(const Board &b, int depth) {
 Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_score) {
 
     Move bestMove = Move();
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
 
     // if there are no legal moves, return
     if (legal.empty()) {
@@ -164,22 +164,23 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
 
         orderingData.incrementPly();
         if (fullWindow) {
             //score = -zobristNMax(copy, depth - 1, -beta, -alpha);
-            score = -rootSearch(copy, depth - 1, -beta, -alpha);
+            score = -rootSearch(b, depth - 1, -beta, -alpha);
         } else {
             //score = -zobristNMax(copy, depth - 1, -alpha - 1, -alpha);
-            score = -rootSearch(copy, depth - 1, -alpha - 1, -alpha);
+            score = -rootSearch(b, depth - 1, -alpha - 1, -alpha);
             if (score > alpha) {
                 //score = -zobristNMax(copy, depth - 1, -beta, -score);
-                score = -rootSearch(copy, depth - 1, -beta, -alpha);
+                score = -rootSearch(b, depth - 1, -beta, -alpha);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         //std::cout << "Move: " << move.getNotation() << " Score: " << score << std::endl;
 
@@ -233,7 +234,7 @@ void Searcher::setEvaluation(Searcher::Evaluation e) {
     evaluation = e;
 }
 
-int Searcher::negamax(Board b, int depth, int alpha, int beta) {
+int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
     if (stopSearch || checkTime()) {
@@ -254,7 +255,7 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
         }
     }
 
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
 
     // order moves
     //eval::orderMoves(b, &legal);
@@ -279,9 +280,10 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
 
     int bestScore = -INF;
     for (Move move : legal) {
-        Board copy = b;
-        copy.makeMove(move);
-        bestScore = std::max(bestScore, -negamax(copy, depth - 1, -beta, -alpha));
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
+        bestScore = std::max(bestScore, -negamax(b, depth - 1, -beta, -alpha));
+        b.unmakeMove(move, undo);
         if (bestScore > alpha) {
             alpha = bestScore;
         }
@@ -294,7 +296,7 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
     return bestScore;
 }
 
-int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
+int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
     if (stopSearch || checkTime()) {
@@ -336,7 +338,7 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -373,19 +375,20 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
         if (fullWindow) {
-            score = -zobristNMax(copy, depth - 1 + extension, -beta, -alpha);
+            score = -zobristNMax(b, depth - 1 + extension, -beta, -alpha);
         } else {
-            score = -zobristNMax(copy, depth - 1 + extension, -alpha - 1, -alpha);
+            score = -zobristNMax(b, depth - 1 + extension, -alpha - 1, -alpha);
             if (score > alpha) {
-                score = -zobristNMax(copy, depth - 1 + extension, -beta, -alpha);
+                score = -zobristNMax(b, depth - 1 + extension, -beta, -alpha);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -424,7 +427,7 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
     return alpha;
 }
 
-int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool verify) {
+int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
     if (stopSearch || checkTime()) {
         stopSearch = true;
@@ -465,7 +468,7 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -498,9 +501,10 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     bool fail_high = false;
     // only ok if we are not in check, TODO any more conditions?
     if (!b.isInCheck(b.isWhiteTurn) && (!verify || depth > 1)) {
-        Board copy = b;
-        copy.nullMove();
-        int score = -nullMovePVS(copy, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        Board::UndoState undo;
+        b.nullMove(&undo);
+        int score = -nullMovePVS(b, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        b.unmakeNullMove(undo);
         if (score >= beta) {
             if (verify) {
                 depth--;
@@ -522,19 +526,20 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
         if (fullWindow) {
-            score = -nullMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+            score = -nullMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
         } else {
-            score = -nullMovePVS(copy, depth - 1 + extension, -alpha - 1, -alpha, verify);
+            score = -nullMovePVS(b, depth - 1 + extension, -alpha - 1, -alpha, verify);
             if (score > alpha) {
-                score = -nullMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                score = -nullMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -577,7 +582,7 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     return alpha;
 }
 
-int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool verify) {
+int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
     if (stopSearch || checkTime()) {
         stopSearch = true;
@@ -618,7 +623,7 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -651,9 +656,10 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     bool fail_high = false;
     // only ok if we are not in check, TODO any more conditions?
     if (!b.isInCheck(b.isWhiteTurn) && (!verify || depth > 1)) {
-        Board copy = b;
-        copy.nullMove();
-        int score = -lateMovePVS(copy, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        Board::UndoState undo;
+        b.nullMove(&undo);
+        int score = -lateMovePVS(b, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        b.unmakeNullMove(undo);
         if (score >= beta) {
             if (verify) {
                 depth--;
@@ -676,27 +682,28 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
-        if (movesSearched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && okToReduce(copy, move)) {
-            score = -lateMovePVS(copy, depth - 2, -(alpha + 1), -alpha, verify);
+        if (movesSearched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && okToReduce(b, move)) {
+            score = -lateMovePVS(b, depth - 2, -(alpha + 1), -alpha, verify);
             if (score > alpha) {
-                score = -lateMovePVS(copy, depth - 1, -beta, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1, -beta, -alpha, verify);
             }
         }
         else {
             if (fullWindow) {
-                score = -lateMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
             } else {
-                score = -lateMovePVS(copy, depth - 1 + extension, -alpha - 1, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1 + extension, -alpha - 1, -alpha, verify);
                 if (score > alpha) {
-                    score = -lateMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                    score = -lateMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
                 }
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -774,7 +781,7 @@ void Searcher::reset(bool continueGame) {
     }
 }
 
-int Searcher::rootSearch(Board b, int depth, int alpha, int beta) {
+int Searcher::rootSearch(Board &b, int depth, int alpha, int beta) {
     switch(algorithm) {
         case NEGAMAX:
             return negamax(b, depth, alpha, beta);

@@ -29,7 +29,7 @@ public:
     Move restrictedSearch(const Board &b, const searchRestrictions &restrictions);
     Move timedSearch(const Board &b, int time);
     Move depthSearch(Board b, int depth, int alpha = -1000000, int beta = 1000000, int* extern_score = nullptr);
-    int rootSearch(Board b, int depth, int alpha, int beta);
+    int rootSearch(Board &b, int depth, int alpha, int beta);
 
     void printPV(const Board &b, int depth);
 
@@ -75,11 +75,11 @@ private:
     Board initialBoard;
 
 
-    int negamax(Board b, int depth, int alpha, int beta);
-    int zobristNMax(const Board &b, int depth, int alpha, int beta);
-    int nullMovePVS(const Board &b, int depth, int alpha, int beta, bool verify);
+    int negamax(Board &b, int depth, int alpha, int beta);
+    int zobristNMax(Board &b, int depth, int alpha, int beta);
+    int nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify);
 
-    int lateMovePVS(const Board &b, int depth, int alpha, int beta, bool verify);
+    int lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify);
     bool okToReduce(const Board &b, Move m);
 
 };

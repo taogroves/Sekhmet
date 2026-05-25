@@ -67,7 +67,7 @@ void Move::setFlag(Flag flag) {
 }
 
 bool Move::operator==(Move move) const {
-    return _move == move._move && _value == move._value;
+    return _move == move._move;
 }
 
 std::string Move::getNotation() const {

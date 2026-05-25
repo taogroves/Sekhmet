@@ -56,7 +56,7 @@ zKey::zKey(const Board &b) {
 
     // add en passant key
     if(b.enPassant != 0) {
-        enPassantFile = short(b.enPassant % 8);
+        enPassantFile = short(__builtin_ctzll(b.enPassant) & 7);
         key ^= enPassantKeys[enPassantFile];
     } else {
         enPassantFile = -1;
@@ -133,16 +133,17 @@ void zKey::clearEnPassant() {
 
 void zKey::updateCastlingRights(short rights) {
     if (castlingRights != rights) {
-        if (castlingRights & 1) {
+        short changedRights = castlingRights ^ rights;
+        if (changedRights & 1) {
             flipKS(true);
         }
-        if (castlingRights & 2) {
+        if (changedRights & 2) {
             flipQS(true);
         }
-        if (castlingRights & 4) {
+        if (changedRights & 4) {
             flipKS(false);
         }
-        if (castlingRights & 8) {
+        if (changedRights & 8) {
             flipQS(false);
         }
         castlingRights = rights;
