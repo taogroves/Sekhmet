@@ -9,8 +9,15 @@
 #include <iostream>
 
 Searcher::Searcher() :
-    orderingData(OrderingData(&zobristTable)) {
-    zobristTable = zTable();
+    stopSearch(&ownedStopSearch),
+    zobristTable(&ownedZobristTable),
+    orderingData(OrderingData(zobristTable)) {
+}
+
+Searcher::Searcher(zTable *sharedTable, std::atomic<bool> *sharedStop) :
+    stopSearch(sharedStop),
+    zobristTable(sharedTable),
+    orderingData(OrderingData(zobristTable)) {
 }
 
 Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restrictions) {
@@ -23,7 +30,7 @@ Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restri
         Move m = depthSearch(b, restrictions.depth);
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms | ";
-        std::cout << "Transpositions: " << zobristTable.size() << std::endl;
+        std::cout << "Transpositions: " << zobristTable->size() << std::endl;
         return m;
     } else if (restrictions.movetime > 0) {
         return timedSearch(b, restrictions.movetime);
@@ -80,7 +87,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
         //bestMove = depthSearch(b, depth);
         int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
 
-        if (stopSearch) { // limits were exceeded in the last search
+        if (stopSearch->load()) { // limits were exceeded in the last search
             break; // we don't know if the last search was a fail high or fail low, so we return the best move we have
         }
 
@@ -112,7 +119,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
         depth++;
     }
     output: std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count() << "ms | ";
-    std::cout << "Depth: " << depth << (stopSearch ? "*" : "") << " | " << "Transpositions: " << zobristTable.size() << " | ";
+    std::cout << "Depth: " << depth << (stopSearch->load() ? "*" : "") << " | " << "Transpositions: " << zobristTable->size() << " | ";
     std::string evalPrint;
     if (!b.isWhiteTurn) {
         score *= -1;
@@ -128,7 +135,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
 
     printPV(b, depth);
 
-    stopSearch = false;
+    stopSearch->store(false);
     return bestMove;
 }
 
@@ -137,7 +144,7 @@ void Searcher::printPV(const Board &b, int depth) {
     Board copy = b;
     std::cout << "PV: ";
     for (int i = 0; i < depth; i++) {
-        currEntry = zobristTable.lookup(copy.getZobristKey());
+        currEntry = zobristTable->lookup(copy.getZobristKey());
         if (currEntry == nullptr || currEntry->getBestMove().getFlags() == Move::NULL_MOVE) {
             break;
         }
@@ -185,8 +192,8 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
         //std::cout << "Move: " << move.getNotation() << " Score: " << score << std::endl;
 
         // if time limit was exceeded, search was incomplete, so we can't trust this move
-        if (stopSearch || checkTime()) {
-            stopSearch = true;
+        if (stopSearch->load() || checkTime()) {
+            stopSearch->store(true);
             //if (score > alpha) std::cout << "Best score: " << score << std::endl;
             break;
         }
@@ -209,7 +216,7 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
         }
     }
 
-    if (!stopSearch) {
+    if (!stopSearch->load()) {
         // if we never found a good move, pick an arbitrary one so we don't add null to the transposition table
         if (bestMove.getFlags() & Move::NULL_MOVE) {
             bestMove = legal.at(0);
@@ -217,7 +224,7 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
 
         // add the best move to the transposition table
         TranspTableEntry e(alpha, depth, TranspTableEntry::EXACT, bestMove);
-        zobristTable.store(b.getZobristKey(), e);
+        zobristTable->store(b.getZobristKey(), e);
     }
 
     if (extern_score != nullptr) {
@@ -237,8 +244,8 @@ void Searcher::setEvaluation(Searcher::Evaluation e) {
 int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
@@ -299,8 +306,8 @@ int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
 int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
@@ -319,7 +326,7 @@ int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -398,7 +405,7 @@ int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -422,15 +429,15 @@ int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
 
 int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
@@ -449,7 +456,7 @@ int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -549,7 +556,7 @@ int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -577,15 +584,15 @@ int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
 
 int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
@@ -604,7 +611,7 @@ int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -713,7 +720,7 @@ int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -743,7 +750,7 @@ int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
@@ -754,12 +761,12 @@ bool Searcher::checkTime() {
     }
     timeCheckRequestCount = 0;
 
-    if (stopSearch) {
+    if (stopSearch->load()) {
         return true;
     }
 
     if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count() > timeLimit) {
-        stopSearch = true;
+        stopSearch->store(true);
         return true;
     }
 
@@ -771,9 +778,9 @@ void Searcher::setTimeLimit(int t) {
 }
 
 void Searcher::reset(bool continueGame) {
-    stopSearch = false;
+    stopSearch->store(false);
     timeCheckRequestCount = 0;
-    zobristTable.clear();
+    zobristTable->clear();
     if (continueGame) {
         orderingData.nextMove();
     } else {

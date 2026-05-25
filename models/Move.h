@@ -45,6 +45,8 @@ public:
     void setValue(int);
 
     bool operator==(Move) const;
+    unsigned int getPacked() const;
+    static Move fromPacked(unsigned int packed);
 
     std::string getNotation() const; // UCI notation
 

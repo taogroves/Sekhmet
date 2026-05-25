@@ -2,15 +2,13 @@
 // Created by Tao G on 2/13/2023.
 //
 
+#include <algorithm>
 #include <cstring>
 #include "UCI.h"
 
 UCI::UCI() {
     // print welcome message, then enter UCI loop
     std::cout << engineName << " version " << version << std::endl;
-    s.setAlgorithm(Searcher::Algorithm::NL_LM_PVS);
-    //s.setAlgorithm(Searcher::Algorithm::NEGAMAX);
-    s.setEvaluation(Searcher::Evaluation::QUIESCENT_PST);
     UCI_loop();
 }
 
@@ -31,10 +29,11 @@ void UCI::UCI_command(const std::string& command) {
     if (command == "uci") {
         std::cout << "id name " << engineName << std::endl;
         std::cout << "id author Tao Groves" << std::endl;
+        std::cout << "option name Threads type spin default " << s.getThreadCount() << " min 1 max 512" << std::endl;
         std::cout << "uciok" << std::endl;
     } else if (command == "isready") {
         UCI_isready();
-    } else if (command.substr(0, 8) == "setoption") {
+    } else if (command.substr(0, 9) == "setoption") {
         UCI_setoption(command);
     } else if (command.substr(0, 8) == "register") {
         UCI_register(command);
@@ -62,7 +61,12 @@ void UCI::UCI_isready() {
 }
 
 void UCI::UCI_setoption(std::string command) {
-
+    std::string prefix = "setoption name Threads value ";
+    if (command.rfind(prefix, 0) == 0) {
+        int count = std::stoi(command.substr(prefix.size()));
+        s.setThreadCount(std::max(1, count));
+        std::cout << "Threads set to " << s.getThreadCount() << std::endl;
+    }
 }
 
 void UCI::UCI_register(std::string command) {

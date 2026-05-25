@@ -25,6 +25,7 @@ public:
     };
 
     Searcher();
+    Searcher(zTable *sharedTable, std::atomic<bool> *sharedStop);
 
     Move restrictedSearch(const Board &b, const searchRestrictions &restrictions);
     Move timedSearch(const Board &b, int time);
@@ -55,7 +56,8 @@ private:
 
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     int timeLimit = 0;
-    std::atomic<bool> stopSearch = false;
+    std::atomic<bool> ownedStopSearch = false;
+    std::atomic<bool> *stopSearch;
     bool checkTime();
     int timeCheckRequestCount = 0;
 
@@ -66,7 +68,8 @@ private:
     static const int FULL_DEPTH_MOVES = 4;
     static const int REDUCTION_LIMIT = 3;
 
-    zTable zobristTable;
+    zTable ownedZobristTable;
+    zTable *zobristTable;
     Algorithm algorithm = ZOBRIST;
     Evaluation evaluation = QUIESCENT_PST;
 

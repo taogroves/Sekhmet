@@ -5,6 +5,7 @@
 #ifndef SEKHMET_ZTABLE_H
 #define SEKHMET_ZTABLE_H
 
+#include <atomic>
 #include <vector>
 #include "zKey.h"
 #include "TranspTableEntry.h"
@@ -29,9 +30,8 @@ public:
 
 private:
     struct Slot {
-        U64 key = 0;
-        bool occupied = false;
-        TranspTableEntry entry;
+        std::atomic<U64> key{0};
+        std::atomic<U64> data{0};
     };
 
     static constexpr size_t TABLE_BITS = 20;
@@ -39,7 +39,10 @@ private:
     static constexpr size_t TABLE_MASK = TABLE_SIZE - 1;
 
     std::vector<Slot> table;
-    int entryCount = 0;
+    std::atomic<int> entryCount = 0;
+
+    static U64 pack(const TranspTableEntry &entry);
+    static TranspTableEntry unpack(U64 packed);
 };
 
 

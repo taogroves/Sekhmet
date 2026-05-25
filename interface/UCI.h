@@ -8,7 +8,7 @@
 #include <iostream>
 #include <string>
 #include "../models/Board.h"
-#include "../search/Search.h"
+#include "../search/ParallelSearcher.h"
 #include "../core/MoveGen.h"
 
 class UCI {
@@ -23,7 +23,7 @@ public:
     int searchTime = 1000;
 
     Board b;
-    Searcher s = Searcher();
+    ParallelSearcher s = ParallelSearcher();
 
     UCI();
 
