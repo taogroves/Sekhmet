@@ -248,6 +248,10 @@ int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
         return 0;
     }
 
+    if (b.isInsufficientMaterial()) {
+        return 0;
+    }
+
     if (depth == 0) {
         switch (evaluation) {
             case MATERIAL:
@@ -321,6 +325,10 @@ int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
 
     // check for 50 move rule
     if (b.halfMoveClock >= 50) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
@@ -451,6 +459,10 @@ int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
 
     // check for 50 move rule
     if (b.halfMoveClock >= 50) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
@@ -606,6 +618,10 @@ int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
 
     // check for 50 move rule
     if (b.halfMoveClock >= 50) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 

@@ -594,6 +594,32 @@ bool Board::isInCheck(bool isWhite) const {
     return isSquareAttacked(king, !isWhite);
 }
 
+bool Board::isInsufficientMaterial() const {
+    U64 pawnsRooksQueens = bitboards[0][PAWN] | bitboards[1][PAWN] |
+                           bitboards[0][ROOK] | bitboards[1][ROOK] |
+                           bitboards[0][QUEEN] | bitboards[1][QUEEN];
+    if (pawnsRooksQueens) {
+        return false;
+    }
+
+    int whiteKnights = MoveGen::popCount(bitboards[1][KNIGHT]);
+    int blackKnights = MoveGen::popCount(bitboards[0][KNIGHT]);
+    int whiteBishops = MoveGen::popCount(bitboards[1][BISHOP]);
+    int blackBishops = MoveGen::popCount(bitboards[0][BISHOP]);
+    int minorPieces = whiteKnights + blackKnights + whiteBishops + blackBishops;
+
+    if (minorPieces <= 1) {
+        return true;
+    }
+
+    if (whiteKnights || blackKnights) {
+        return false;
+    }
+
+    U64 bishops = bitboards[0][BISHOP] | bitboards[1][BISHOP];
+    return (bishops & BLACK_SQUARES) == 0 || (bishops & WHITE_SQUARES) == 0;
+}
+
 bool Board::whiteCanCastleKingside() const {
     // check castling rights
     if (!(castlingRights & 1)) return false;

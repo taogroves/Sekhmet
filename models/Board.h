@@ -69,6 +69,7 @@ public:
 
     bool isSquareAttacked(int square, bool isWhite) const;
     bool isInCheck(bool isWhite) const;
+    bool isInsufficientMaterial() const;
 
     bool whiteCanCastleKingside() const;
     bool whiteCanCastleQueenside() const;

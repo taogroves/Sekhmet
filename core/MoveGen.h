@@ -30,6 +30,7 @@ public:
     static U64 bishopTable[64][1024];
 
     static U64 getBlockers(int square, U64 mask);
+    static int popCount(U64 bb);
 private:
 
     static U64 rookTable[64][4096];
@@ -63,6 +64,4 @@ private:
 
     // helper functions for bit manipulation
     static int popLSB(U64 &bb);
-    static int popCount(U64 bb);
 };
-
