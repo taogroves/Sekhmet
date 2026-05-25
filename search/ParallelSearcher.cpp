@@ -25,11 +25,37 @@ unsigned int ParallelSearcher::getThreadCount() const {
     return threadCount;
 }
 
+Move ParallelSearcher::getPonderMove(const Board &b, const Move &bestMove) const {
+    if (bestMove.getFlags() & Move::NULL_MOVE) {
+        return Move();
+    }
+
+    Board copy = b;
+    copy.makeMove(bestMove);
+    const TranspTableEntry *entry = sharedTable.lookup(copy.getZobristKey());
+    if (entry == nullptr || entry->getBestMove().getFlags() & Move::NULL_MOVE) {
+        return Move();
+    }
+
+    MoveList legal = MoveGen::getLegalMovesFast(copy);
+    for (Move move : legal) {
+        if (move.getPacked() == entry->getBestMove().getPacked()) {
+            return move;
+        }
+    }
+
+    return Move();
+}
+
 void ParallelSearcher::reset(bool continueGame) {
     stopSearch.store(false, std::memory_order_relaxed);
     if (!continueGame) {
         sharedTable.clear();
     }
+}
+
+void ParallelSearcher::stop() {
+    stopSearch.store(true, std::memory_order_relaxed);
 }
 
 Move ParallelSearcher::restrictedSearch(const Board &b, const Searcher::searchRestrictions &restrictions) {

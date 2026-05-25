@@ -22,8 +22,7 @@ Searcher::Searcher(zTable *sharedTable, std::atomic<bool> *sharedStop) :
 
 Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restrictions) {
     if (restrictions.infinite) {
-        timeLimit = 999999999;
-        return depthSearch(b, 100);
+        return timedSearch(b, 999999999);
     } else if (restrictions.depth > 0) {
         timeLimit = 0;
         auto start = std::chrono::high_resolution_clock::now();

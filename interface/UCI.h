@@ -6,7 +6,9 @@
 #define SEKHMET_UCI_H
 
 #include <iostream>
+#include <mutex>
 #include <string>
+#include <thread>
 #include "../models/Board.h"
 #include "../search/ParallelSearcher.h"
 #include "../core/MoveGen.h"
@@ -18,6 +20,7 @@ public:
 
     bool engineRunning;
     bool newGameComing;
+    bool ponderOption = false;
 
     int searchDepth = 4;
     int searchTime = 1000;
@@ -26,8 +29,16 @@ public:
     ParallelSearcher s = ParallelSearcher();
 
     UCI();
+    ~UCI();
 
 private:
+    std::thread searchThread;
+    std::mutex searchMutex;
+    bool ponderSearchInProgress = false;
+    bool completedPonderMoveAvailable = false;
+    Move completedPonderMove;
+    Searcher::searchRestrictions ponderHitRestrictions;
+
     void UCI_loop();
     void UCI_command(const std::string& command);
 
@@ -40,6 +51,12 @@ private:
     void UCI_stop();
     void UCI_ponderhit();
     void UCI_quit();
+
+    Searcher::searchRestrictions parseGoRestrictions(const std::string& command);
+    void startSearch(const Board &position, const Searcher::searchRestrictions &restrictions, bool printBestMove);
+    void outputBestMove(const Board &position, const Move &bestMove);
+    void joinSearchThread();
+    void stopSearchThread();
 };
 
 

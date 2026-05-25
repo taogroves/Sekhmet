@@ -14,7 +14,9 @@ public:
 
     void setThreadCount(unsigned int count);
     unsigned int getThreadCount() const;
+    Move getPonderMove(const Board &b, const Move &bestMove) const;
     void reset(bool continueGame = false);
+    void stop();
 
 private:
     struct WorkerResult {

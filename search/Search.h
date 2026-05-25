@@ -17,6 +17,7 @@ class Searcher {
 public:
     struct searchRestrictions {
         bool infinite = false;
+        bool ponder = false;
         int depth = 0;
         int movetime = 0;
         int time[2] = {0, 0};
