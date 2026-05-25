@@ -85,7 +85,7 @@ void UCI::UCI_position(const std::string& command) {
                 std::string move;
                 for (char i : moves) {
                     if (i == ' ') {
-                        legal = MoveGen::getLegalMoves(b);
+                        legal = MoveGen::getLegalMovesFast(b);
                         for (Move m : legal) {
                             if (m.getNotation() == move) {
                                 b.makeMove(m);
@@ -96,7 +96,7 @@ void UCI::UCI_position(const std::string& command) {
                         move += i;
                     }
                 }
-                legal = MoveGen::getLegalMoves(b);
+                legal = MoveGen::getLegalMovesFast(b);
                 for (Move m : legal) {
                     if (m.getNotation() == move) {
                         b.makeMove(m);
@@ -116,7 +116,7 @@ void UCI::UCI_position(const std::string& command) {
             }
             token = strtok(NULL, " ");
             while (token != NULL) {
-                MoveList legal = MoveGen::getLegalMoves(b);
+                MoveList legal = MoveGen::getLegalMovesFast(b);
                 for (Move m : legal) {
                     if (m.getNotation() == token) {
                         b.makeMove(m);

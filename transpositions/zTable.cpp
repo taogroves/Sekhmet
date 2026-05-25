@@ -2,33 +2,40 @@
 // Created by Tao G on 2/12/2023.
 //
 
-#include <algorithm>
 #include "zTable.h"
 
-void zTable::store(const zKey &key, TranspTableEntry data) {
-    auto result = table.insert(std::make_pair(key.getValue(), data));
+zTable::zTable() : table(TABLE_SIZE) {
+}
 
-    // if the key already exists, replace the value
-    if (!result.second) {
-        result.first->second = data;
+void zTable::store(const zKey &key, TranspTableEntry data) {
+    U64 keyValue = key.getValue();
+    Slot &slot = table[keyValue & TABLE_MASK];
+
+    if (!slot.occupied) {
+        entryCount++;
+    } else if (slot.key != keyValue && slot.entry.getDepth() > data.getDepth()) {
+        return;
     }
+
+    slot.key = keyValue;
+    slot.occupied = true;
+    slot.entry = data;
 }
 
 const TranspTableEntry *zTable::lookup(const zKey &key) const {
-    auto result = table.find(key.getValue());
-    if (result != table.end()) {
-        return &result->second;
-    } else {
-        return nullptr;
-    }
+    U64 keyValue = key.getValue();
+    const Slot &slot = table[keyValue & TABLE_MASK];
+    return slot.occupied && slot.key == keyValue ? &slot.entry : nullptr;
 }
 
 int zTable::size() {
-    return table.size();
+    return entryCount;
 }
 
 void zTable::clear() {
-    table.clear();
+    for (Slot &slot : table) {
+        slot.occupied = false;
+    }
+    entryCount = 0;
 }
-
 

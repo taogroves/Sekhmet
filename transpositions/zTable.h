@@ -5,7 +5,7 @@
 #ifndef SEKHMET_ZTABLE_H
 #define SEKHMET_ZTABLE_H
 
-#include <unordered_map>
+#include <vector>
 #include "zKey.h"
 #include "TranspTableEntry.h"
 
@@ -19,7 +19,7 @@ public:
         UPPERBOUND, // score is at most as good as the score
     };
 
-    zTable() = default;
+    zTable();
 
     const TranspTableEntry *lookup(const zKey &key) const;
     void store(const zKey &key, TranspTableEntry data);
@@ -28,7 +28,18 @@ public:
     void clear();
 
 private:
-    std::unordered_map<U64, TranspTableEntry> table;
+    struct Slot {
+        U64 key = 0;
+        bool occupied = false;
+        TranspTableEntry entry;
+    };
+
+    static constexpr size_t TABLE_BITS = 20;
+    static constexpr size_t TABLE_SIZE = ONE << TABLE_BITS;
+    static constexpr size_t TABLE_MASK = TABLE_SIZE - 1;
+
+    std::vector<Slot> table;
+    int entryCount = 0;
 };
 
 

@@ -58,9 +58,11 @@ private:
     // helper function to add all four promotion pieces
     static void genPawnPromotions(MoveList *list, int from, int to, int flags=0, PieceType=PAWN);
 
+    static MoveList filterLegalMovesFast(const Board &b, const MoveList &valid);
+    static bool isLegalMoveFast(const Board &b, Move move, bool inCheck);
+
     // helper functions for bit manipulation
     static int popLSB(U64 &bb);
     static int popCount(U64 bb);
 };
-
 

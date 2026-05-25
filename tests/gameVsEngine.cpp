@@ -12,7 +12,7 @@
 
 Move playerInput(const Board &b) {
     // get all legal moves
-    std::vector<Move> legal = MoveGen::getLegalMoves(b);
+    std::vector<Move> legal = MoveGen::getLegalMovesFast(b);
 
     // if there are no legal moves, return a move that will end the game
     if (legal.empty())
@@ -213,7 +213,7 @@ int main() {
     while (true) {
         //b.printBoard();
         // if there are no legal moves, the game is over
-        if (MoveGen::getLegalMoves(b).empty())
+        if (MoveGen::getLegalMovesFast(b).empty())
             break;
 
         // if it's white's turn, get a move from the user or the engine

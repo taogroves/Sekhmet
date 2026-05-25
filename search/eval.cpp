@@ -219,7 +219,7 @@ int eval::qSearch(const Board &b, int alpha, int beta) {
     // look for checkmate
     if (legal.empty()) {
         if (b.isInCheck(b.isWhiteTurn)) {
-            legal = MoveGen::getLegalMoves(b);
+            legal = MoveGen::getLegalMovesFast(b);
             if (legal.empty()) {
                 return -1000000 + int(b.fullMoveNumber);
             }
