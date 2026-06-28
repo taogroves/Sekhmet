@@ -20,7 +20,8 @@ stalemate.
 
 ## Features
 - Full, stateless UCI support.
-- Fast Move Generation: ~42M nodes/sec singlethreaded, ~287M nodes/sec multithreaded with O2 compiler optimizations on a 5.3GHz Intel i7-12700K.
+- Full, scalable multithreading support.
+- Fast Move Generation: ~60M nodes/sec singlethreaded, ~400M nodes/sec multithreaded with O2 compiler optimizations on a 5.3GHz Intel i7-12700K.
 - Extensive Search Optimization
   - Killer Move Heuristic
   - History Heuristic
@@ -28,6 +29,9 @@ stalemate.
   - Verified Null-Move Pruning
   - Adaptive Late Move Reduction
   - Aspiration Windows
+- Multithreaded search
+  - Lazy-SMP orchestration using a shared lockless hash table
+  - Dynamic move voting among threads
 - Tapered Evaulation
   - Piece Square Tables
   - Pawn Structure
