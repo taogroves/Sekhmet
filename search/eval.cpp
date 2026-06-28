@@ -26,6 +26,9 @@ void eval::init() {
 }
 
 int eval::evaluateBoard(bool isWhite, const Board &b) {
+    if (b.isInsufficientMaterial()) {
+        return 0;
+    }
 
     int score = 0;
 
@@ -146,6 +149,9 @@ int eval::evaluateBoard(bool isWhite, const Board &b) {
 }
 
 short eval::evaluateMaterial(bool isWhite, const Board &b) {
+    if (b.isInsufficientMaterial()) {
+        return 0;
+    }
 
     short score = 0;
 
@@ -167,6 +173,10 @@ short eval::numSetBits(U64 i) {
 
 
 int eval::searchAllCaptures(bool isWhite, const Board &b, int alpha, int beta) {
+    if (b.isInsufficientMaterial()) {
+        return 0;
+    }
+
     // if evaluation is greater than beta, return beta
     int eval = evaluateMaterial(isWhite, b);
     if (eval >= beta) {
@@ -203,6 +213,9 @@ int eval::searchAllCaptures(bool isWhite, const Board &b, int alpha, int beta) {
 }
 
 int eval::qSearch(const Board &b, int alpha, int beta) {
+    if (b.isInsufficientMaterial()) {
+        return 0;
+    }
 
     int stand_pat = evaluateBoard(b.isWhiteTurn, b);
 
@@ -219,7 +232,7 @@ int eval::qSearch(const Board &b, int alpha, int beta) {
     // look for checkmate
     if (legal.empty()) {
         if (b.isInCheck(b.isWhiteTurn)) {
-            legal = MoveGen::getLegalMoves(b);
+            legal = MoveGen::getLegalMovesFast(b);
             if (legal.empty()) {
                 return -1000000 + int(b.fullMoveNumber);
             }

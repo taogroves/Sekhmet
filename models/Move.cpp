@@ -67,7 +67,18 @@ void Move::setFlag(Flag flag) {
 }
 
 bool Move::operator==(Move move) const {
-    return _move == move._move && _value == move._value;
+    return _move == move._move;
+}
+
+unsigned int Move::getPacked() const {
+    return _move;
+}
+
+Move Move::fromPacked(unsigned int packed) {
+    Move move;
+    move._move = packed;
+    move._value = 0;
+    return move;
 }
 
 std::string Move::getNotation() const {

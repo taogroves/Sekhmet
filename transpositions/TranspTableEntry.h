@@ -20,6 +20,9 @@ public:
         UPPERBOUND, // score is at most as good as the score
     };
 
+    TranspTableEntry()
+        : score(0), depth(-1), flag(EXACT), bestMove(Move()) {}
+
     TranspTableEntry(int score, int depth, Flag flag, Move bestMove)
         : score(score), depth(depth), flag(flag), bestMove(bestMove) {}
 

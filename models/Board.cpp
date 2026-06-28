@@ -222,15 +222,29 @@ void Board::printBoard(bool showMoves, bool flipped) const {
 }
 
 void Board::nullMove() {
+    nullMove(nullptr);
+}
+
+void Board::nullMove(UndoState *undo) {
+    if (undo) {
+        undo->isWhiteTurn = isWhiteTurn;
+        undo->castlingRights = castlingRights;
+        undo->enPassant = enPassant;
+        undo->halfMoveClock = halfMoveClock;
+        undo->fullMoveNumber = fullMoveNumber;
+        undo->zobristKey = zobristKey;
+    }
 
     // clear en passant
+    if (enPassant) {
+        zobristKey.clearEnPassant();
+    }
     enPassant = 0;
 
     // deal with full move number
     if (!isWhiteTurn) {
         fullMoveNumber++;
     }
-
     zobristKey.flipTurn();
     isWhiteTurn = !isWhiteTurn;
 }
@@ -295,6 +309,19 @@ void Board::tempMove(Move move) {
 }
 
 void Board::makeMove(Move move) {
+    makeMove(move, nullptr);
+}
+
+void Board::makeMove(Move move, UndoState *undo) {
+    if (undo) {
+        undo->isWhiteTurn = isWhiteTurn;
+        undo->castlingRights = castlingRights;
+        undo->enPassant = enPassant;
+        undo->halfMoveClock = halfMoveClock;
+        undo->fullMoveNumber = fullMoveNumber;
+        undo->zobristKey = zobristKey;
+    }
+
     // clear en passant from zobrist key
     if (enPassant) {
         zobristKey.clearEnPassant();
@@ -354,7 +381,7 @@ void Board::makeMove(Move move) {
         } else {
             enPassant = ONE << (move.getTo() - 8);
         }
-        zobristKey.setEnPassant(short(enPassant % 8));
+        zobristKey.setEnPassant(short(__builtin_ctzll(enPassant) & 7));
     }
 
     // deal with halfmove clock
@@ -369,14 +396,82 @@ void Board::makeMove(Move move) {
         fullMoveNumber++;
     }
 
-    // deal with 3-fold repetition
-    positionHistory[halfMoveClock] = zobristKey.getValue();
-
     // update castling rights
     updateCastlingRights(move);
 
     zobristKey.flipTurn();
     isWhiteTurn = !isWhiteTurn;
+
+    // deal with repetition history after the position key is fully updated
+    if (halfMoveClock <= 100) {
+        if (undo) {
+            undo->historyIndex = int(halfMoveClock);
+            undo->historyValue = positionHistory[halfMoveClock];
+        }
+        positionHistory[halfMoveClock] = zobristKey.getValue();
+    }
+}
+
+void Board::unmakeMove(Move move, const UndoState &undo) {
+    bool mover = undo.isWhiteTurn;
+    unsigned int flags = move.getFlags();
+
+    isWhiteTurn = mover;
+
+    if (!flags) {
+        movePiece(mover, move.getPieceType(), move.getTo(), move.getFrom());
+    } else if (flags & Move::CAPTURE && flags & Move::PROMOTION) {
+        removePiece(mover, move.getPromotionPieceType(), move.getTo());
+        addPiece(!mover, move.getCapturedPieceType(), move.getTo());
+        addPiece(mover, move.getPieceType(), move.getFrom());
+    } else if (flags & Move::CAPTURE) {
+        movePiece(mover, move.getPieceType(), move.getTo(), move.getFrom());
+        addPiece(!mover, move.getCapturedPieceType(), move.getTo());
+    } else if (flags & Move::KSIDE_CASTLE) {
+        movePiece(mover, PieceType::KING, move.getTo(), move.getFrom());
+        if (mover) {
+            movePiece(mover, PieceType::ROOK, 61, 63);
+        } else {
+            movePiece(mover, PieceType::ROOK, 5, 7);
+        }
+    } else if (flags & Move::QSIDE_CASTLE) {
+        movePiece(mover, PieceType::KING, move.getTo(), move.getFrom());
+        if (mover) {
+            movePiece(mover, PieceType::ROOK, 59, 56);
+        } else {
+            movePiece(mover, PieceType::ROOK, 3, 0);
+        }
+    } else if (flags & Move::EN_PASSANT) {
+        movePiece(mover, PieceType::PAWN, move.getTo(), move.getFrom());
+        if (mover) {
+            addPiece(!mover, PieceType::PAWN, move.getTo() + 8);
+        } else {
+            addPiece(!mover, PieceType::PAWN, move.getTo() - 8);
+        }
+    } else if (flags & Move::PROMOTION) {
+        removePiece(mover, move.getPromotionPieceType(), move.getTo());
+        addPiece(mover, PieceType::PAWN, move.getFrom());
+    } else if (flags & Move::DOUBLE_PAWN_PUSH) {
+        movePiece(mover, PieceType::PAWN, move.getTo(), move.getFrom());
+    }
+
+    castlingRights = undo.castlingRights;
+    enPassant = undo.enPassant;
+    halfMoveClock = undo.halfMoveClock;
+    fullMoveNumber = undo.fullMoveNumber;
+    zobristKey = undo.zobristKey;
+    if (undo.historyIndex >= 0) {
+        positionHistory[undo.historyIndex] = undo.historyValue;
+    }
+}
+
+void Board::unmakeNullMove(const UndoState &undo) {
+    isWhiteTurn = undo.isWhiteTurn;
+    castlingRights = undo.castlingRights;
+    enPassant = undo.enPassant;
+    halfMoveClock = undo.halfMoveClock;
+    fullMoveNumber = undo.fullMoveNumber;
+    zobristKey = undo.zobristKey;
 }
 
 zKey Board::getZobristKey() const {
@@ -388,6 +483,21 @@ void Board::setZobristKey(zKey key) {
 }
 
 bool Board::operator==(const Board &b) const {
+    return false;
+}
+
+bool Board::isRepeatedPosition() const {
+    if (halfMoveClock < 4) {
+        return false;
+    }
+
+    U64 currentKey = zobristKey.getValue();
+    for (int i = int(halfMoveClock) - 2; i >= 0; i -= 2) {
+        if (positionHistory[i] == currentKey) {
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -499,6 +609,32 @@ bool Board::isInCheck(bool isWhite) const {
     if (king == 64) return false;
 
     return isSquareAttacked(king, !isWhite);
+}
+
+bool Board::isInsufficientMaterial() const {
+    U64 pawnsRooksQueens = bitboards[0][PAWN] | bitboards[1][PAWN] |
+                           bitboards[0][ROOK] | bitboards[1][ROOK] |
+                           bitboards[0][QUEEN] | bitboards[1][QUEEN];
+    if (pawnsRooksQueens) {
+        return false;
+    }
+
+    int whiteKnights = MoveGen::popCount(bitboards[1][KNIGHT]);
+    int blackKnights = MoveGen::popCount(bitboards[0][KNIGHT]);
+    int whiteBishops = MoveGen::popCount(bitboards[1][BISHOP]);
+    int blackBishops = MoveGen::popCount(bitboards[0][BISHOP]);
+    int minorPieces = whiteKnights + blackKnights + whiteBishops + blackBishops;
+
+    if (minorPieces <= 1) {
+        return true;
+    }
+
+    if (whiteKnights || blackKnights) {
+        return false;
+    }
+
+    U64 bishops = bitboards[0][BISHOP] | bitboards[1][BISHOP];
+    return (bishops & BLACK_SQUARES) == 0 || (bishops & WHITE_SQUARES) == 0;
 }
 
 bool Board::whiteCanCastleKingside() const {

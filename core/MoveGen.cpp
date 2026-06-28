@@ -71,121 +71,61 @@ MoveList MoveGen::getLegalMoves(const Board& b) {
 
 MoveList MoveGen::getLegalMovesFast(const Board& b) {
     MoveList valid = getValidMoves(b);
+    return filterLegalMovesFast(b, valid);
+}
+
+MoveList MoveGen::filterLegalMovesFast(const Board& b, const MoveList &valid) {
 
     MoveList legal;
     legal.reserve(valid.size());
 
-    // if the king is in check, revert to slow method
-    if (b.isInCheck(b.isWhiteTurn)) {
-        for (auto move : valid) {
-            Board copy = b;
-            copy.tempMove(move);
-            if (!copy.isInCheck(b.isWhiteTurn)) {
-                legal.push_back(move);
-            }
-        }
-        return legal;
-    }
-
-    int king = __builtin_ctzll(b.bitboards[b.isWhiteTurn][KING]);
-    U64 kingB = LookupTables::bishopMasks[king];
-    U64 kingR = LookupTables::rookMasks[king];
-
-
-    // for each move
+    bool inCheck = b.isInCheck(b.isWhiteTurn);
     for (auto move : valid) {
-        U64 from = (1UL << move.getFrom());
-        U64 to = (1UL << move.getTo());
-
-        U64 blockers = ((b.occupancy[0] | b.occupancy[1]) ^ from) | to;
-
-        // if the move is a king move, do a full check
-        if (move.getPieceType() == KING) {
-            Board copy = b;
-            copy.tempMove(move);
-            if (!copy.isInCheck(b.isWhiteTurn)) {
-                legal.push_back(move);
-            }
-            continue;
-        }
-
-        // if it's a pawn move
-        if (move.getPieceType() == PAWN) {
-            // if the move is an en passant, remove the captured piece
-            if (move.getFlags() & Move::EN_PASSANT) {
-                blockers ^= (1UL << (move.getTo() + (b.isWhiteTurn ? 8 : -8)));
-            }
-
-            // if the move is along a vert/diagonal with the king, it must be legal
-            if (popCount((from | to) & (kingB | kingR)) == 2) {
-                legal.push_back(move);
-                continue;
-            }
-            // if the move starts on the same diagonal, check that line only
-            else if (from & kingB) {
-                // if there is a bishop/queen on the same diagonal, the move is illegal
-                if (getBishopAttacks(king, blockers) & (b.bitboards[!b.isWhiteTurn][BISHOP] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            }
-            // if the move starts on the same vert, check that line only
-            else if (from & kingR) {
-                // if there is a rook/queen on the same vert, the move is illegal
-                if (getRookAttacks(king, blockers) & (b.bitboards[!b.isWhiteTurn][ROOK] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            }
-
+        if (isLegalMoveFast(b, move, inCheck)) {
             legal.push_back(move);
-            continue;
-        }
-
-        // if it's a knight move
-        else if (move.getPieceType() == KNIGHT) {
-            // if we are moving from a king line, check the file
-            if (from & (kingB)) {
-                // if there is a bishop/queen on the same file, the move is illegal
-                if (getBishopAttacks(king, blockers) & (b.bitboards[!b.isWhiteTurn][ROOK] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            } else if (from & (kingR)) {
-                // if there is a rook/queen on the same file, the move is illegal
-                if (getRookAttacks(king, blockers) & (b.bitboards[!b.isWhiteTurn][ROOK] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            }
-
-            legal.push_back(move);
-            continue;
-        }
-
-        // if it's a bishop, rook, or queen move
-        else {
-            // if we are moving out of a king line, check the file
-            if (popCount((from | to) & (kingB | kingR)) == 2) {
-                legal.push_back(move);
-                continue;
-            }
-            // if there is a bishop/queen on the same file, the move is illegal
-            if ((from) & (kingB)) {
-                if (getBishopAttacks(king, blockers) &
-                    (b.bitboards[!b.isWhiteTurn][BISHOP] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            }
-            else if ((from) & (kingR)) {
-                // if there is a rook/queen on the same file, the move is illegal
-                if (getRookAttacks(king, blockers) & (b.bitboards[!b.isWhiteTurn][ROOK] | b.bitboards[!b.isWhiteTurn][QUEEN])) {
-                    continue;
-                }
-            }
-
-            legal.push_back(move);
-            continue;
         }
     }
 
     return legal;
+}
+
+bool MoveGen::isLegalMoveFast(const Board& b, Move move, bool inCheck) {
+    if (inCheck || move.getPieceType() == KING) {
+        Board copy = b;
+        copy.tempMove(move);
+        return !copy.isInCheck(b.isWhiteTurn);
+    }
+
+    int king = __builtin_ctzll(b.bitboards[b.isWhiteTurn][KING]);
+    if (king == 64) return true;
+
+    U64 kingB = LookupTables::bishopMasks[king];
+    U64 kingR = LookupTables::rookMasks[king];
+    U64 from = (ONE << move.getFrom());
+
+    if (!(from & (kingB | kingR))) {
+        return true;
+    }
+
+    U64 to = (ONE << move.getTo());
+    U64 blockers = ((b.occupancy[0] | b.occupancy[1]) ^ from) | to;
+    if (move.getFlags() & Move::EN_PASSANT) {
+        blockers ^= (ONE << (move.getTo() + (b.isWhiteTurn ? 8 : -8)));
+    }
+
+    if (from & kingB) {
+        U64 bishopQueen = b.bitboards[!b.isWhiteTurn][BISHOP] | b.bitboards[!b.isWhiteTurn][QUEEN];
+        if (move.getFlags() & Move::CAPTURE) {
+            bishopQueen &= ~to;
+        }
+        return !(getBishopAttacks(king, blockers) & bishopQueen);
+    }
+
+    U64 rookQueen = b.bitboards[!b.isWhiteTurn][ROOK] | b.bitboards[!b.isWhiteTurn][QUEEN];
+    if (move.getFlags() & Move::CAPTURE) {
+        rookQueen &= ~to;
+    }
+    return !(getRookAttacks(king, blockers) & rookQueen);
 }
 
 MoveList MoveGen::getCaptures(const Board &b) {
@@ -300,18 +240,7 @@ MoveList MoveGen::getCaptures(const Board &b) {
         addMoves(&list, b, from, KING, destinations, attackable);
     }
 
-    std::vector<Move> legal;
-    legal.reserve(list.size());
-    // check legality
-    for (Move &move : list) {
-        Board copy = b;
-        copy.tempMove(move);
-        if (!copy.isInCheck(b.isWhiteTurn)) {
-            legal.push_back(move);
-        }
-    }
-
-    return legal;
+    return filterLegalMovesFast(b, list);
 }
 
 void MoveGen::addMoves(MoveList *list, const Board &b, int square, PieceType piece, U64 destinations, U64 attackable) {

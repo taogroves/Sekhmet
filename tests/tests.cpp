@@ -10,7 +10,7 @@
 #include <algorithm>
 
 bool tests::legalMovesTest(const Board& b, int expected) {
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
     if (expected == -1) {
         std::cout << "Found " << legal.size() << " legal moves:" << std::endl;
         for (Move m : legal) {
@@ -44,7 +44,7 @@ bool tests::perfTestMultithreaded(const Board &b, int depth, int expected) {
     //std::cout << "Testing " << depth << " ply search..." << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
     unsigned long count = 0;
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
     std::vector<std::future<U64>> threads;
     for (auto &m : legal) {
         Board copy = b;
@@ -74,11 +74,11 @@ U64 tests::nodeCount(const Board &b, int depth) {
     if (depth == 0) {
         return 1;
     } else if (depth == 1) {
-        return MoveGen::getLegalMoves(b).size();
+        return MoveGen::getLegalMovesFast(b).size();
     }
 
     U64 count = 0;
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
     for (Move m : legal) {
         Board copy = b;
         copy.makeMove(m);
@@ -94,7 +94,7 @@ void tests::NodeCountCompare(const Board& b, int depth, const std::string &compa
     std::unordered_map<std::string, unsigned int> compareMoves;
     std::list<std::string> differences;
 
-    std::vector<Move> topLevel = MoveGen::getLegalMoves(b);
+    std::vector<Move> topLevel = MoveGen::getLegalMovesFast(b);
     for (Move &move : topLevel) {
         Board copy = b;
         copy.makeMove(move);

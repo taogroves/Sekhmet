@@ -9,21 +9,27 @@
 #include <iostream>
 
 Searcher::Searcher() :
-    orderingData(OrderingData(&zobristTable)) {
-    zobristTable = zTable();
+    stopSearch(&ownedStopSearch),
+    zobristTable(&ownedZobristTable),
+    orderingData(OrderingData(zobristTable)) {
+}
+
+Searcher::Searcher(zTable *sharedTable, std::atomic<bool> *sharedStop) :
+    stopSearch(sharedStop),
+    zobristTable(sharedTable),
+    orderingData(OrderingData(zobristTable)) {
 }
 
 Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restrictions) {
     if (restrictions.infinite) {
-        timeLimit = 999999999;
-        return depthSearch(b, 100);
+        return timedSearch(b, 999999999);
     } else if (restrictions.depth > 0) {
         timeLimit = 0;
         auto start = std::chrono::high_resolution_clock::now();
         Move m = depthSearch(b, restrictions.depth);
         auto end = std::chrono::high_resolution_clock::now();
         std::cout << "Time taken: " << std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() << "ms | ";
-        std::cout << "Transpositions: " << zobristTable.size() << std::endl;
+        std::cout << "Transpositions: " << zobristTable->size() << std::endl;
         return m;
     } else if (restrictions.movetime > 0) {
         return timedSearch(b, restrictions.movetime);
@@ -60,7 +66,7 @@ Move Searcher::restrictedSearch(const Board &b, const searchRestrictions &restri
 Move Searcher::timedSearch(const Board &b, int time) {
 
     // if we only have one legal move, return it
-    MoveList moves = MoveGen::getLegalMoves(b);
+    MoveList moves = MoveGen::getLegalMovesFast(b);
     if (moves.size() == 1) {
         std::cout << "Move " << moves[0].getNotation() << " is forced." << std::endl;
         return moves[0];
@@ -80,7 +86,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
         //bestMove = depthSearch(b, depth);
         int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count();
 
-        if (stopSearch) { // limits were exceeded in the last search
+        if (stopSearch->load()) { // limits were exceeded in the last search
             break; // we don't know if the last search was a fail high or fail low, so we return the best move we have
         }
 
@@ -112,7 +118,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
         depth++;
     }
     output: std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count() << "ms | ";
-    std::cout << "Depth: " << depth << (stopSearch ? "*" : "") << " | " << "Transpositions: " << zobristTable.size() << " | ";
+    std::cout << "Depth: " << depth << (stopSearch->load() ? "*" : "") << " | " << "Transpositions: " << zobristTable->size() << " | ";
     std::string evalPrint;
     if (!b.isWhiteTurn) {
         score *= -1;
@@ -128,7 +134,7 @@ Move Searcher::timedSearch(const Board &b, int time) {
 
     printPV(b, depth);
 
-    stopSearch = false;
+    stopSearch->store(false);
     return bestMove;
 }
 
@@ -137,7 +143,7 @@ void Searcher::printPV(const Board &b, int depth) {
     Board copy = b;
     std::cout << "PV: ";
     for (int i = 0; i < depth; i++) {
-        currEntry = zobristTable.lookup(copy.getZobristKey());
+        currEntry = zobristTable->lookup(copy.getZobristKey());
         if (currEntry == nullptr || currEntry->getBestMove().getFlags() == Move::NULL_MOVE) {
             break;
         }
@@ -150,7 +156,7 @@ void Searcher::printPV(const Board &b, int depth) {
 Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_score) {
 
     Move bestMove = Move();
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
 
     // if there are no legal moves, return
     if (legal.empty()) {
@@ -164,28 +170,29 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
 
         orderingData.incrementPly();
         if (fullWindow) {
             //score = -zobristNMax(copy, depth - 1, -beta, -alpha);
-            score = -rootSearch(copy, depth - 1, -beta, -alpha);
+            score = -rootSearch(b, depth - 1, -beta, -alpha);
         } else {
             //score = -zobristNMax(copy, depth - 1, -alpha - 1, -alpha);
-            score = -rootSearch(copy, depth - 1, -alpha - 1, -alpha);
+            score = -rootSearch(b, depth - 1, -alpha - 1, -alpha);
             if (score > alpha) {
                 //score = -zobristNMax(copy, depth - 1, -beta, -score);
-                score = -rootSearch(copy, depth - 1, -beta, -alpha);
+                score = -rootSearch(b, depth - 1, -beta, -alpha);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         //std::cout << "Move: " << move.getNotation() << " Score: " << score << std::endl;
 
         // if time limit was exceeded, search was incomplete, so we can't trust this move
-        if (stopSearch || checkTime()) {
-            stopSearch = true;
+        if (stopSearch->load() || checkTime()) {
+            stopSearch->store(true);
             //if (score > alpha) std::cout << "Best score: " << score << std::endl;
             break;
         }
@@ -208,7 +215,7 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
         }
     }
 
-    if (!stopSearch) {
+    if (!stopSearch->load()) {
         // if we never found a good move, pick an arbitrary one so we don't add null to the transposition table
         if (bestMove.getFlags() & Move::NULL_MOVE) {
             bestMove = legal.at(0);
@@ -216,7 +223,7 @@ Move Searcher::depthSearch(Board b, int depth, int alpha, int beta, int *extern_
 
         // add the best move to the transposition table
         TranspTableEntry e(alpha, depth, TranspTableEntry::EXACT, bestMove);
-        zobristTable.store(b.getZobristKey(), e);
+        zobristTable->store(b.getZobristKey(), e);
     }
 
     if (extern_score != nullptr) {
@@ -233,11 +240,15 @@ void Searcher::setEvaluation(Searcher::Evaluation e) {
     evaluation = e;
 }
 
-int Searcher::negamax(Board b, int depth, int alpha, int beta) {
+int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
@@ -254,7 +265,7 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
         }
     }
 
-    MoveList legal = MoveGen::getLegalMoves(b);
+    MoveList legal = MoveGen::getLegalMovesFast(b);
 
     // order moves
     //eval::orderMoves(b, &legal);
@@ -268,20 +279,16 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
         }
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = b.isWhiteTurn ? 0 : 1; i < b.halfMoveClock; i+=2) {
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     int bestScore = -INF;
     for (Move move : legal) {
-        Board copy = b;
-        copy.makeMove(move);
-        bestScore = std::max(bestScore, -negamax(copy, depth - 1, -beta, -alpha));
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
+        bestScore = std::max(bestScore, -negamax(b, depth - 1, -beta, -alpha));
+        b.unmakeMove(move, undo);
         if (bestScore > alpha) {
             alpha = bestScore;
         }
@@ -294,30 +301,29 @@ int Searcher::negamax(Board b, int depth, int alpha, int beta) {
     return bestScore;
 }
 
-int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
+int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
 
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -336,7 +342,7 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -373,19 +379,20 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
         if (fullWindow) {
-            score = -zobristNMax(copy, depth - 1 + extension, -beta, -alpha);
+            score = -zobristNMax(b, depth - 1 + extension, -beta, -alpha);
         } else {
-            score = -zobristNMax(copy, depth - 1 + extension, -alpha - 1, -alpha);
+            score = -zobristNMax(b, depth - 1 + extension, -alpha - 1, -alpha);
             if (score > alpha) {
-                score = -zobristNMax(copy, depth - 1 + extension, -beta, -alpha);
+                score = -zobristNMax(b, depth - 1 + extension, -beta, -alpha);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -395,7 +402,7 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -419,34 +426,33 @@ int Searcher::zobristNMax(const Board &b, int depth, int alpha, int beta) {
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
 
-int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool verify) {
+int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -465,7 +471,7 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -498,9 +504,10 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     bool fail_high = false;
     // only ok if we are not in check, TODO any more conditions?
     if (!b.isInCheck(b.isWhiteTurn) && (!verify || depth > 1)) {
-        Board copy = b;
-        copy.nullMove();
-        int score = -nullMovePVS(copy, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        Board::UndoState undo;
+        b.nullMove(&undo);
+        int score = -nullMovePVS(b, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        b.unmakeNullMove(undo);
         if (score >= beta) {
             if (verify) {
                 depth--;
@@ -522,19 +529,20 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
         if (fullWindow) {
-            score = -nullMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+            score = -nullMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
         } else {
-            score = -nullMovePVS(copy, depth - 1 + extension, -alpha - 1, -alpha, verify);
+            score = -nullMovePVS(b, depth - 1 + extension, -alpha - 1, -alpha, verify);
             if (score > alpha) {
-                score = -nullMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                score = -nullMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -544,7 +552,7 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -572,34 +580,33 @@ int Searcher::nullMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
 
-int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool verify) {
+int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify) {
     // check search limits
-    if (stopSearch || checkTime()) {
-        stopSearch = true;
+    if (stopSearch->load() || checkTime()) {
+        stopSearch->store(true);
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
+        return 0;
+    }
+
+    if (b.isInsufficientMaterial()) {
         return 0;
     }
 
     int startingAlpha = alpha;
-    const TranspTableEntry *ttEntry = zobristTable.lookup(b.getZobristKey());
+    const TranspTableEntry *ttEntry = zobristTable->lookup(b.getZobristKey());
     // if we have a transposition table entry, use it
     if (ttEntry && (ttEntry->getDepth() >= depth)) {
 
@@ -618,7 +625,7 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
         }
     }
 
-    MoveList legalMoves = MoveGen::getLegalMoves(b);
+    MoveList legalMoves = MoveGen::getLegalMovesFast(b);
 
     // check for checkmate or stalemate
     if (legalMoves.empty()) {
@@ -651,9 +658,10 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     bool fail_high = false;
     // only ok if we are not in check, TODO any more conditions?
     if (!b.isInCheck(b.isWhiteTurn) && (!verify || depth > 1)) {
-        Board copy = b;
-        copy.nullMove();
-        int score = -lateMovePVS(copy, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        Board::UndoState undo;
+        b.nullMove(&undo);
+        int score = -lateMovePVS(b, depth - 1 - NULL_MOVE_REDUCTION, -beta, -beta + 1, verify);
+        b.unmakeNullMove(undo);
         if (score >= beta) {
             if (verify) {
                 depth--;
@@ -676,27 +684,28 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     while(picker.hasNext()) {
         Move move = picker.getNext();
 
-        Board copy = b;
-        copy.makeMove(move);
+        Board::UndoState undo;
+        b.makeMove(move, &undo);
         int score;
         orderingData.incrementPly();
-        if (movesSearched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && okToReduce(copy, move)) {
-            score = -lateMovePVS(copy, depth - 2, -(alpha + 1), -alpha, verify);
+        if (movesSearched >= FULL_DEPTH_MOVES && depth >= REDUCTION_LIMIT && okToReduce(b, move)) {
+            score = -lateMovePVS(b, depth - 2, -(alpha + 1), -alpha, verify);
             if (score > alpha) {
-                score = -lateMovePVS(copy, depth - 1, -beta, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1, -beta, -alpha, verify);
             }
         }
         else {
             if (fullWindow) {
-                score = -lateMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
             } else {
-                score = -lateMovePVS(copy, depth - 1 + extension, -alpha - 1, -alpha, verify);
+                score = -lateMovePVS(b, depth - 1 + extension, -alpha - 1, -alpha, verify);
                 if (score > alpha) {
-                    score = -lateMovePVS(copy, depth - 1 + extension, -beta, -alpha, verify);
+                    score = -lateMovePVS(b, depth - 1 + extension, -beta, -alpha, verify);
                 }
             }
         }
         orderingData.decrementPly();
+        b.unmakeMove(move, undo);
 
         // beta cutoff
         if (score >= beta) {
@@ -706,7 +715,7 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
             }
 
             TranspTableEntry newEntry(score, depth, TranspTableEntry::LOWERBOUND, move);
-            zobristTable.store(b.getZobristKey(), newEntry);
+            zobristTable->store(b.getZobristKey(), newEntry);
             return beta;
         }
 
@@ -736,7 +745,7 @@ int Searcher::lateMovePVS(const Board &b, int depth, int alpha, int beta, bool v
     } else { // otherwise we have an exact score
         flag = TranspTableEntry::EXACT;
     }
-    zobristTable.store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
+    zobristTable->store(b.getZobristKey(), TranspTableEntry(alpha, depth, flag, bestMove));
 
     return alpha;
 }
@@ -747,12 +756,12 @@ bool Searcher::checkTime() {
     }
     timeCheckRequestCount = 0;
 
-    if (stopSearch) {
+    if (stopSearch->load()) {
         return true;
     }
 
     if (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startTime).count() > timeLimit) {
-        stopSearch = true;
+        stopSearch->store(true);
         return true;
     }
 
@@ -764,9 +773,9 @@ void Searcher::setTimeLimit(int t) {
 }
 
 void Searcher::reset(bool continueGame) {
-    stopSearch = false;
+    stopSearch->store(false);
     timeCheckRequestCount = 0;
-    zobristTable.clear();
+    zobristTable->clear();
     if (continueGame) {
         orderingData.nextMove();
     } else {
@@ -774,7 +783,7 @@ void Searcher::reset(bool continueGame) {
     }
 }
 
-int Searcher::rootSearch(Board b, int depth, int alpha, int beta) {
+int Searcher::rootSearch(Board &b, int depth, int alpha, int beta) {
     switch(algorithm) {
         case NEGAMAX:
             return negamax(b, depth, alpha, beta);

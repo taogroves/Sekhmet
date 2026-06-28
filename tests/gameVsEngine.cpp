@@ -9,10 +9,11 @@
 #include "../search/Search.h"
 #include "../core/MoveGen.h"
 #include "../search/eval.h"
+#include "../search/ParallelSearcher.h"
 
 Move playerInput(const Board &b) {
     // get all legal moves
-    std::vector<Move> legal = MoveGen::getLegalMoves(b);
+    std::vector<Move> legal = MoveGen::getLegalMovesFast(b);
 
     // if there are no legal moves, return a move that will end the game
     if (legal.empty())
@@ -85,13 +86,24 @@ Move playerInput(const Board &b) {
     goto get;
 }
 
-Move engineMove(const Board &b, int time, Searcher::Algorithm alg, Searcher::Evaluation eval) {
-    auto s = Searcher();
-    s.setEvaluation(eval);
-    s.setAlgorithm(alg);
-    Move m = s.timedSearch(b, time * 1000);
-    std::cout << (b.isWhiteTurn ? "White " : "Black ") << "plays " << m.getNotation() << std::endl;
-    return m;
+Move engineMove(const Board &b, int time, Searcher::Algorithm alg, Searcher::Evaluation eval, int threads) {
+    // if threads <= 1, use the single-threaded Searcher, otherwise use ParallelSearcher
+    if (threads <= 1) {
+        auto s = Searcher();
+        s.setEvaluation(eval);
+        s.setAlgorithm(alg);
+        Move m = s.timedSearch(b, time * 1000);
+        std::cout << (b.isWhiteTurn ? "White " : "Black ") << "plays " << m.getNotation() << std::endl;
+        return m;
+    } else {
+        ParallelSearcher p;
+        p.setThreadCount((unsigned int)threads);
+        Searcher::searchRestrictions r;
+        r.movetime = time * 1000; // milliseconds
+        Move m = p.restrictedSearch(b, r);
+        std::cout << (b.isWhiteTurn ? "White " : "Black ") << "plays " << m.getNotation() << std::endl;
+        return m;
+    }
 }
 
 int main() {
@@ -125,6 +137,7 @@ int main() {
     int w_time = 0;
     Searcher::Algorithm w_alg;
     Searcher::Evaluation w_eval;
+    int w_threads = 1;
     if (!w_is_human) {
         std::cout << "Select a search algorithm for white (1: NegaMax, 2: PVS, 3: PVS w/ Null-Move Pruning, 4: PVS w/ NMP & Late Move Reduction): ";
         std::cin >> input;
@@ -160,6 +173,11 @@ int main() {
         }
         std::cout << "How long should white think (in seconds)? ";
         std::cin >> w_time;
+        // ask how many threads white's engine should use
+        ParallelSearcher tmpw;
+        std::cout << "How many threads should white use? (default " << tmpw.getThreadCount() << "): ";
+        std::cin >> w_threads;
+        if (w_threads <= 0) w_threads = tmpw.getThreadCount();
     }
 
     // ask the user if black is a human or an engine
@@ -172,6 +190,7 @@ int main() {
     int b_time = 0;
     Searcher::Algorithm b_alg;
     Searcher::Evaluation b_eval;
+    int b_threads = 1;
     if (!b_is_human) {
         std::cout << "Select a search algorithm for black (1: NegaMax, 2: PVS, 3: PVS w/ Null-Move Pruning, 4: PVS w/ NMP & Late Move Reduction): ";
         std::cin >> input;
@@ -207,13 +226,17 @@ int main() {
         }
         std::cout << "How long should black think (in seconds)? ";
         std::cin >> b_time;
+        ParallelSearcher tmpb;
+        std::cout << "How many threads should black use? (default " << tmpb.getThreadCount() << "): ";
+        std::cin >> b_threads;
+        if (b_threads <= 0) b_threads = tmpb.getThreadCount();
     }
 
     // main game loop
     while (true) {
         //b.printBoard();
         // if there are no legal moves, the game is over
-        if (MoveGen::getLegalMoves(b).empty())
+        if (MoveGen::getLegalMovesFast(b).empty())
             break;
 
         // if it's white's turn, get a move from the user or the engine
@@ -221,8 +244,8 @@ int main() {
             Move m;
             if (w_is_human)
                 m = playerInput(b);
-            else
-                m = engineMove(b, w_time, w_alg, w_eval);
+                else
+                m = engineMove(b, w_time, w_alg, w_eval, w_threads);
             b.makeMove(m);
         }
 
@@ -231,8 +254,8 @@ int main() {
             Move m;
             if (b_is_human)
                 m = playerInput(b);
-            else
-                m = engineMove(b, b_time, b_alg, b_eval);
+                else
+                m = engineMove(b, b_time, b_alg, b_eval, b_threads);
             b.makeMove(m);
         }
     }

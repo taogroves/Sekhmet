@@ -17,6 +17,7 @@ class Searcher {
 public:
     struct searchRestrictions {
         bool infinite = false;
+        bool ponder = false;
         int depth = 0;
         int movetime = 0;
         int time[2] = {0, 0};
@@ -25,11 +26,12 @@ public:
     };
 
     Searcher();
+    Searcher(zTable *sharedTable, std::atomic<bool> *sharedStop);
 
     Move restrictedSearch(const Board &b, const searchRestrictions &restrictions);
     Move timedSearch(const Board &b, int time);
     Move depthSearch(Board b, int depth, int alpha = -1000000, int beta = 1000000, int* extern_score = nullptr);
-    int rootSearch(Board b, int depth, int alpha, int beta);
+    int rootSearch(Board &b, int depth, int alpha, int beta);
 
     void printPV(const Board &b, int depth);
 
@@ -55,7 +57,8 @@ private:
 
     std::chrono::time_point<std::chrono::high_resolution_clock> startTime;
     int timeLimit = 0;
-    std::atomic<bool> stopSearch = false;
+    std::atomic<bool> ownedStopSearch = false;
+    std::atomic<bool> *stopSearch;
     bool checkTime();
     int timeCheckRequestCount = 0;
 
@@ -66,7 +69,8 @@ private:
     static const int FULL_DEPTH_MOVES = 4;
     static const int REDUCTION_LIMIT = 3;
 
-    zTable zobristTable;
+    zTable ownedZobristTable;
+    zTable *zobristTable;
     Algorithm algorithm = ZOBRIST;
     Evaluation evaluation = QUIESCENT_PST;
 
@@ -75,11 +79,11 @@ private:
     Board initialBoard;
 
 
-    int negamax(Board b, int depth, int alpha, int beta);
-    int zobristNMax(const Board &b, int depth, int alpha, int beta);
-    int nullMovePVS(const Board &b, int depth, int alpha, int beta, bool verify);
+    int negamax(Board &b, int depth, int alpha, int beta);
+    int zobristNMax(Board &b, int depth, int alpha, int beta);
+    int nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify);
 
-    int lateMovePVS(const Board &b, int depth, int alpha, int beta, bool verify);
+    int lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify);
     bool okToReduce(const Board &b, Move m);
 
 };

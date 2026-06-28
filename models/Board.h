@@ -18,6 +18,17 @@
 class Board {
 
 public:
+    struct UndoState {
+        bool isWhiteTurn;
+        short castlingRights;
+        U64 enPassant;
+        unsigned int halfMoveClock;
+        unsigned int fullMoveNumber;
+        zKey zobristKey;
+        int historyIndex = -1;
+        U64 historyValue = 0;
+    };
+
     Board();
     //Board(const Board &b);
     explicit Board(const char fen[]);
@@ -27,12 +38,15 @@ public:
     bool operator==(const Board &b) const;
 
     U64 bitboards[2][6] = {{0}};
-    U64 positionHistory[50] = {0};
+    U64 positionHistory[101] = {0};
 
     void nullMove();
+    void nullMove(UndoState *undo);
     void makeMove(Move m);
+    void makeMove(Move m, UndoState *undo);
     void tempMove(Move m);
-    void unmakeMove(Move m);
+    void unmakeMove(Move m, const UndoState &undo);
+    void unmakeNullMove(const UndoState &undo);
 
 
     bool isWhiteTurn = true;
@@ -55,6 +69,8 @@ public:
 
     bool isSquareAttacked(int square, bool isWhite) const;
     bool isInCheck(bool isWhite) const;
+    bool isInsufficientMaterial() const;
+    bool isRepeatedPosition() const;
 
     bool whiteCanCastleKingside() const;
     bool whiteCanCastleQueenside() const;
