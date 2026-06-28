@@ -1,6 +1,6 @@
 # Sekhmet - Fast, Optimized UCI Chess Engine
 Sekhmet is a UCI chess engine written in C++, named after the Egyptian goddess of war. It 
-plays at a ~2000 level in rapid, and becomes significantly stronger relative to a human player
+plays at a ~2300 level in rapid, and becomes significantly stronger relative to a human player
 as time control shortens. 
 Recognizes most UCI commands/parameters; uses time appropriately in multi- and single-phase games.
 
