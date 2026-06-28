@@ -38,7 +38,7 @@ public:
     bool operator==(const Board &b) const;
 
     U64 bitboards[2][6] = {{0}};
-    U64 positionHistory[50] = {0};
+    U64 positionHistory[101] = {0};
 
     void nullMove();
     void nullMove(UndoState *undo);
@@ -70,6 +70,7 @@ public:
     bool isSquareAttacked(int square, bool isWhite) const;
     bool isInCheck(bool isWhite) const;
     bool isInsufficientMaterial() const;
+    bool isRepeatedPosition() const;
 
     bool whiteCanCastleKingside() const;
     bool whiteCanCastleQueenside() const;

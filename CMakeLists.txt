@@ -4,7 +4,7 @@ project(Sekhmet)
 set(CMAKE_CXX_STANDARD 20)
 
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
-set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native -flto")
 
 # enable this to use the utility functions in /external/
 #add_executable(HelperFunctions external/genPawnMasks.cpp)

@@ -32,6 +32,10 @@ private:
     static unsigned int defaultThreadCount();
     int allocateTime(const Board &b, const Searcher::searchRestrictions &restrictions) const;
     WorkerResult searchWorker(const Board &b, int maxDepth, int workerIndex);
+    static bool isValidResult(const WorkerResult &result);
+    static int moveVoteKey(const Move &move);
+    static long long threadVoteValue(const WorkerResult &result, int worstScore);
+    std::vector<WorkerResult>::const_iterator selectBestResult(const std::vector<WorkerResult> &results) const;
     Move timedSearch(const Board &b, int milliseconds);
     Move depthSearch(const Board &b, int depth);
     void printSearchInfo(const Board &b, const WorkerResult &result, long elapsedMs, bool stopped);

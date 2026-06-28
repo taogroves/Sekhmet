@@ -279,13 +279,8 @@ int Searcher::negamax(Board &b, int depth, int alpha, int beta) {
         }
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = b.isWhiteTurn ? 0 : 1; i < b.halfMoveClock; i+=2) {
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     int bestScore = -INF;
@@ -314,17 +309,12 @@ int Searcher::zobristNMax(Board &b, int depth, int alpha, int beta) {
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
         return 0;
     }
 
@@ -448,17 +438,12 @@ int Searcher::nullMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
         return 0;
     }
 
@@ -607,17 +592,12 @@ int Searcher::lateMovePVS(Board &b, int depth, int alpha, int beta, bool verify)
         return 0;
     }
 
-    // if there have been at least 4 irreversible moves, check for repetition
-    if (b.halfMoveClock >= 4) {
-        for (int i = 0; i < b.halfMoveClock; i++) { // TODO only need to look at every other move
-            if (b.positionHistory[i] == b.getZobristKey().getValue()) {
-                return 0; // TODO if there is only one occurence, don't return 0 unless curr_ply > root_ply + 2
-            }
-        }
+    if (b.isRepeatedPosition()) {
+        return 0; // TODO if there is only one occurrence, don't return 0 unless curr_ply > root_ply + 2
     }
 
     // check for 50 move rule
-    if (b.halfMoveClock >= 50) {
+    if (b.halfMoveClock >= 100) {
         return 0;
     }
 

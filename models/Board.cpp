@@ -396,18 +396,20 @@ void Board::makeMove(Move move, UndoState *undo) {
         fullMoveNumber++;
     }
 
-    // deal with 3-fold repetition
-    if (undo) {
-        undo->historyIndex = int(halfMoveClock);
-        undo->historyValue = positionHistory[halfMoveClock];
-    }
-    positionHistory[halfMoveClock] = zobristKey.getValue();
-
     // update castling rights
     updateCastlingRights(move);
 
     zobristKey.flipTurn();
     isWhiteTurn = !isWhiteTurn;
+
+    // deal with repetition history after the position key is fully updated
+    if (halfMoveClock <= 100) {
+        if (undo) {
+            undo->historyIndex = int(halfMoveClock);
+            undo->historyValue = positionHistory[halfMoveClock];
+        }
+        positionHistory[halfMoveClock] = zobristKey.getValue();
+    }
 }
 
 void Board::unmakeMove(Move move, const UndoState &undo) {
@@ -481,6 +483,21 @@ void Board::setZobristKey(zKey key) {
 }
 
 bool Board::operator==(const Board &b) const {
+    return false;
+}
+
+bool Board::isRepeatedPosition() const {
+    if (halfMoveClock < 4) {
+        return false;
+    }
+
+    U64 currentKey = zobristKey.getValue();
+    for (int i = int(halfMoveClock) - 2; i >= 0; i -= 2) {
+        if (positionHistory[i] == currentKey) {
+            return true;
+        }
+    }
+
     return false;
 }
 
